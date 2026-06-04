@@ -34,6 +34,8 @@ const sentryErrorMessages: Partial<Record<SafeSentryStatusErrorCode, string>> = 
   unknown: "Sentry status is temporarily unavailable.",
 };
 
+const fallbackSentryErrorMessage = "Sentry status is temporarily unavailable.";
+
 export async function SentryStatusCard() {
   const state = await loadSentryStatusCardState();
 
@@ -43,7 +45,7 @@ export async function SentryStatusCard() {
         badgeLabel="Status error"
         modeLabel="Unknown"
         modeTone="border-zinc-500/25 bg-zinc-500/10 text-zinc-200"
-        message={sentryErrorMessages[state.code] ?? sentryErrorMessages.unknown}
+        message={sentryErrorMessages[state.code] ?? fallbackSentryErrorMessage}
         showHornInitially={false}
       />
     );

@@ -37,6 +37,8 @@ const technicalErrorMessages: Partial<Record<SafeVehicleStatusErrorCode, string>
   unknown: "Vehicle status is temporarily unavailable.",
 };
 
+const fallbackTechnicalErrorMessage = "Vehicle status is temporarily unavailable.";
+
 export async function VehicleStatusCard() {
   const state = await loadVehicleStatusCardState();
 
@@ -48,7 +50,7 @@ export async function VehicleStatusCard() {
         connectionTone="text-red-200"
         description="Live vehicle status"
         title="Model Y Bridge"
-        message={technicalErrorMessages[state.code] ?? technicalErrorMessages.unknown}
+        message={technicalErrorMessages[state.code] ?? fallbackTechnicalErrorMessage}
         items={[
           { label: "Battery", value: "—", icon: BatteryCharging },
           { label: "Lock", value: "—", icon: LockKeyhole },

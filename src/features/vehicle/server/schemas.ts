@@ -23,6 +23,50 @@ export const vehicleStatusSchema = z.union([
   vehicleStatusUnavailableSchema,
 ]);
 
+export const sentryModeSchema = z.enum([
+  "unknown",
+  "off",
+  "idle",
+  "armed",
+  "aware",
+  "panic",
+  "quiet",
+]);
+
+export const vehicleSentryAvailabilityReasonSchema = z.enum([
+  "vehicle_unavailable",
+  "missing_data",
+]);
+
+export const vehicleSentryStatusAvailableSchema = z
+  .object({
+    sentryMode: sentryModeSchema,
+    isActive: z.boolean(),
+    isIncidentLikely: z.boolean(),
+    lastUpdatedAt: z.string().min(1).nullable(),
+    source: z.string().min(1),
+    vehicleOnline: z.boolean(),
+    availabilityReason: z.literal("missing_data").optional(),
+  })
+  .strict();
+
+export const vehicleSentryStatusUnavailableSchema = z
+  .object({
+    sentryMode: z.literal("unknown"),
+    isActive: z.literal(false),
+    isIncidentLikely: z.literal(false),
+    lastUpdatedAt: z.null(),
+    source: z.literal("unavailable"),
+    vehicleOnline: z.literal(false),
+    availabilityReason: z.literal("vehicle_unavailable"),
+  })
+  .strict();
+
+export const vehicleSentryStatusSchema = z.union([
+  vehicleSentryStatusUnavailableSchema,
+  vehicleSentryStatusAvailableSchema,
+]);
+
 export const vehicleBackendCommandSchema = z.enum([
   "wake",
   "lock",
@@ -73,11 +117,35 @@ export const vehicleCommandResultSchema = z.union([
 
 export const knownVehicleApiErrorSchema = z
   .object({
-    error: z.enum(["unauthorized", "rate_limited", "missing_tesla_scope"]),
+    error: z.enum([
+      "unauthorized",
+      "rate_limited",
+      "missing_tesla_scope",
+      "vehicle_unavailable",
+      "vehicle_command_not_configured",
+      "horn_command_failed",
+    ]),
+    retryAfterSeconds: z.number().int().positive().optional(),
+  })
+  .strict();
+
+export const hornSuccessSchema = z
+  .object({
+    result: z.literal("honk_requested"),
+    requestedAt: z.string().min(1),
+  })
+  .strict();
+
+export const hornCooldownErrorSchema = z
+  .object({
+    error: z.literal("horn_cooldown_active"),
+    retryAfterSeconds: z.number().int().positive(),
   })
   .strict();
 
 export type VehicleStatus = z.infer<typeof vehicleStatusSchema>;
+export type VehicleSentryStatus = z.infer<typeof vehicleSentryStatusSchema>;
 export type VehicleCommandResult = z.infer<typeof vehicleCommandResultSchema>;
 export type VehicleBackendCommand = z.infer<typeof vehicleBackendCommandSchema>;
 export type KnownVehicleApiError = z.infer<typeof knownVehicleApiErrorSchema>;
+export type HornSuccess = z.infer<typeof hornSuccessSchema>;

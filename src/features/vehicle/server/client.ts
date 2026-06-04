@@ -5,11 +5,16 @@ import { ZodError, type ZodSchema } from "zod";
 import { getServerEnv } from "@/lib/server/env";
 import {
   knownVehicleApiErrorSchema,
+  hornCooldownErrorSchema,
+  hornSuccessSchema,
   vehicleCommandResultSchema,
+  vehicleSentryStatusSchema,
   vehicleStatusSchema,
+  type HornSuccess,
   type KnownVehicleApiError,
   type VehicleBackendCommand,
   type VehicleCommandResult,
+  type VehicleSentryStatus,
   type VehicleStatus,
 } from "./schemas";
 
@@ -44,6 +49,7 @@ export type VehicleCommandName = keyof typeof vehicleCommandEndpointMap;
 
 export type TeslaApiClientErrorCode =
   | KnownVehicleApiError["error"]
+  | "horn_cooldown_active"
   | "http_error"
   | "invalid_response"
   | "request_failed"
@@ -52,23 +58,27 @@ export type TeslaApiClientErrorCode =
 export class TeslaApiClientError extends Error {
   readonly code: TeslaApiClientErrorCode;
   readonly status?: number;
+  readonly retryAfterSeconds?: number;
   readonly cause?: unknown;
 
   constructor({
     code,
     message,
     status,
+    retryAfterSeconds,
     cause,
   }: {
     code: TeslaApiClientErrorCode;
     message: string;
     status?: number;
+    retryAfterSeconds?: number;
     cause?: unknown;
   }) {
     super(message);
     this.name = "TeslaApiClientError";
     this.code = code;
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
     this.cause = cause;
   }
 }
@@ -76,6 +86,18 @@ export class TeslaApiClientError extends Error {
 export async function getVehicleStatus() {
   return requestTeslaBackend("/api/vehicle/status", vehicleStatusSchema, {
     method: "GET",
+  });
+}
+
+export async function getVehicleSentryStatus() {
+  return requestTeslaBackend("/api/vehicle/sentry", vehicleSentryStatusSchema, {
+    method: "GET",
+  });
+}
+
+export async function honkHorn(): Promise<HornSuccess> {
+  return requestTeslaBackend("/api/vehicle/horn/honk", hornSuccessSchema, {
+    method: "POST",
   });
 }
 
@@ -118,6 +140,17 @@ async function requestTeslaBackend<TResponse>(
   }
 
   const payload = await parseJsonResponse(response);
+  const hornCooldownError = hornCooldownErrorSchema.safeParse(payload);
+
+  if (hornCooldownError.success) {
+    throw new TeslaApiClientError({
+      code: "horn_cooldown_active",
+      message: "Horn cooldown is active.",
+      status: response.status,
+      retryAfterSeconds: hornCooldownError.data.retryAfterSeconds,
+    });
+  }
+
   const knownError = knownVehicleApiErrorSchema.safeParse(payload);
 
   if (knownError.success) {
@@ -125,6 +158,7 @@ async function requestTeslaBackend<TResponse>(
       code: knownError.data.error,
       message: `Tesla backend returned ${knownError.data.error}.`,
       status: response.status,
+      retryAfterSeconds: knownError.data.retryAfterSeconds,
     });
   }
 
@@ -181,4 +215,4 @@ function normalizeFetchError(error: unknown) {
   });
 }
 
-export type { VehicleCommandResult, VehicleStatus };
+export type { HornSuccess, VehicleCommandResult, VehicleSentryStatus, VehicleStatus };

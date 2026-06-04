@@ -74,50 +74,81 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const fallbackPayload = {
-    body: "Open Tesla Web for the latest vehicle bridge update.",
-    title: "Tesla Web",
-  };
-
-  let payload = fallbackPayload;
-
-  if (event.data) {
-    try {
-      const parsedPayload = event.data.json();
-
-      payload = {
-        body: typeof parsedPayload.body === "string" ? parsedPayload.body : fallbackPayload.body,
-        title: typeof parsedPayload.title === "string" ? parsedPayload.title : fallbackPayload.title,
-      };
-    } catch {
-      payload = {
-        body: event.data.text() || fallbackPayload.body,
-        title: fallbackPayload.title,
-      };
-    }
+  if (!event.data) {
+    return;
   }
 
+  let payload;
+
+  try {
+    payload = event.data.json();
+  } catch {
+    return;
+  }
+
+  if (!isSentryAlertPayload(payload)) {
+    return;
+  }
+
+  const notificationTitle = payload.title || "Sentry alert";
+  const notificationBody = payload.body || "Open Tesla Web to review Sentry status.";
+
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/icons/bridge-icon-192.png",
-      tag: "tesla-web-push",
-    }),
+    Promise.all([
+      self.registration.showNotification(notificationTitle, {
+        body: notificationBody,
+        data: payload,
+        icon: "/icons/bridge-icon-192.png",
+        tag: `sentry-${payload.vin}`,
+      }),
+      broadcastSentryAlert(payload),
+    ]),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const notificationData = event.notification.data;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       const visibleClient = clientList.find((client) => "focus" in client);
 
       if (visibleClient) {
+        if (isSentryAlertPayload(notificationData)) {
+          visibleClient.postMessage(notificationData);
+        }
+
         return visibleClient.focus();
       }
 
-      return self.clients.openWindow("/");
+      return self.clients.openWindow(isSentryAlertPayload(notificationData) ? "/?sentry_alert=1" : "/");
     }),
   );
 });
+
+function isSentryAlertPayload(payload) {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      payload.type === "sentry_alert" &&
+      typeof payload.vin === "string" &&
+      typeof payload.sentryMode === "string" &&
+      isSentryAlertSeverity(payload.severity) &&
+      typeof payload.observedAt === "string" &&
+      typeof payload.title === "string" &&
+      typeof payload.body === "string",
+  );
+}
+
+function isSentryAlertSeverity(severity) {
+  return severity === "warning" || severity === "critical";
+}
+
+function broadcastSentryAlert(payload) {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+    clientList.forEach((client) => {
+      client.postMessage(payload);
+    });
+  });
+}

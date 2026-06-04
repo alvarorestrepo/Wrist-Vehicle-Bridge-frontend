@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
 import { SignInScreen } from "@/features/auth/components/sign-in-screen";
 import { PushNotificationsCard } from "@/features/push/components/push-notifications-card";
+import { SentryStatusCard } from "@/features/vehicle/components/sentry-status-card";
 import { VehicleActionGrid } from "@/features/vehicle/components/vehicle-action-grid";
 import { VehicleHero } from "@/features/vehicle/components/vehicle-hero";
 import { VehicleStatusCard } from "@/features/vehicle/components/vehicle-status-card";
@@ -22,6 +23,7 @@ export default async function Home() {
       <div className="mt-5 sm:mt-10">
         <VehicleActionGrid />
       </div>
+      <SentryStatusCard />
       <PushNotificationsCard />
     </AppShell>
   );

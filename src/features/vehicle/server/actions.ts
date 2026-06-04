@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import {
   getVehicleStatus,
+  honkHorn,
   sendVehicleCommand,
   TeslaApiClientError,
   type TeslaApiClientErrorCode,
@@ -28,6 +29,22 @@ type VehicleCommandActionResult =
     }
   | {
       status: "waking";
+      message: string;
+      retryAfterSeconds: number;
+    }
+  | {
+      status: "failed";
+      message: string;
+    };
+
+type HornActionResult =
+  | {
+      status: "completed";
+      message: string;
+      requestedAt: string;
+    }
+  | {
+      status: "cooldown";
       message: string;
       retryAfterSeconds: number;
     }
@@ -98,6 +115,33 @@ export async function refreshVehicleStatus() {
   return getVehicleStatus();
 }
 
+export async function honkHornManually(): Promise<HornActionResult> {
+  await requireSession();
+
+  try {
+    const result = await honkHorn();
+
+    return {
+      status: "completed",
+      message: "Horn request sent successfully.",
+      requestedAt: result.requestedAt,
+    };
+  } catch (error) {
+    if (error instanceof TeslaApiClientError && error.code === "horn_cooldown_active") {
+      return {
+        status: "cooldown",
+        message: "Horn cooldown is active. Wait before trying again.",
+        retryAfterSeconds: error.retryAfterSeconds ?? 1,
+      };
+    }
+
+    return {
+      status: "failed",
+      message: getFriendlyCommandErrorMessage(error),
+    };
+  }
+}
+
 async function requireSession() {
   const session = await auth();
 
@@ -115,6 +159,8 @@ function getFriendlyCommandErrorMessage(error: unknown) {
 }
 
 const commandErrorMessages: Record<TeslaApiClientErrorCode | "unknown", string> = {
+  horn_command_failed: "Horn command failed safely. Try again shortly.",
+  horn_cooldown_active: "Horn cooldown is active. Wait before trying again.",
   http_error: "Vehicle command is temporarily unavailable. Try again shortly.",
   invalid_response: "Vehicle command returned an unexpected response.",
   missing_tesla_scope: "Vehicle permissions are missing for this command.",
@@ -122,5 +168,7 @@ const commandErrorMessages: Record<TeslaApiClientErrorCode | "unknown", string> 
   request_failed: "Vehicle command could not reach the backend. Try again shortly.",
   timeout: "Vehicle command took too long to respond. Try again shortly.",
   unauthorized: "Vehicle command is not authorized for this session.",
+  vehicle_command_not_configured: "Horn command is not configured on the backend yet.",
+  vehicle_unavailable: "Vehicle is unavailable. Try again when it is online.",
   unknown: "Vehicle command failed safely. Try again shortly.",
 };
